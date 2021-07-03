@@ -5,38 +5,48 @@ import ctypes
 import re
 import serial
 
-def ValidHandle(value):
+from ctypes.wintypes import BOOL
+from ctypes.wintypes import HWND
+from ctypes.wintypes import DWORD
+from ctypes.wintypes import WORD
+from ctypes.wintypes import LONG
+from ctypes.wintypes import ULONG
+from ctypes.wintypes import HKEY
+from ctypes.wintypes import BYTE
+from serial.win32 import ULONG_PTR
+
+def ValidHandle(value, func, arguments):
     if value == 0:
         raise ctypes.WinError()
     return value
 
-NULL = 0
-HDEVINFO = ctypes.c_int
-BOOL = ctypes.c_int
 CHAR = ctypes.c_char
-PCTSTR = ctypes.c_char_p
-HWND = ctypes.c_uint
-DWORD = ctypes.c_ulong
 PDWORD = ctypes.POINTER(DWORD)
-ULONG = ctypes.c_ulong
-ULONG_PTR = ctypes.POINTER(ULONG)
-#~ PBYTE = ctypes.c_char_p
-PBYTE = ctypes.c_void_p
+
+NULL = 0
+HDEVINFO = ctypes.c_void_p
+LPCTSTR = ctypes.c_wchar_p
+PCTSTR = ctypes.c_wchar_p
+PTSTR = ctypes.c_wchar_p
+LPDWORD = PDWORD = ctypes.POINTER(DWORD)
+#~ LPBYTE = PBYTE = ctypes.POINTER(BYTE)
+LPBYTE = PBYTE = ctypes.c_void_p        # XXX avoids error about types
 
 class GUID(ctypes.Structure):
     _fields_ = [
-        ('Data1', ctypes.c_ulong),
-        ('Data2', ctypes.c_ushort),
-        ('Data3', ctypes.c_ushort),
-        ('Data4', ctypes.c_ubyte*8),
+        ('Data1', DWORD),
+        ('Data2', WORD),
+        ('Data3', WORD),
+        ('Data4', BYTE * 8),
     ]
+
     def __str__(self):
-        return "{%08x-%04x-%04x-%s-%s}" % (
+        return "{{{:08x}-{:04x}-{:04x}-{}-{}}}".format(
             self.Data1,
             self.Data2,
             self.Data3,
-            ''.join(["%02x" % d for d in self.Data4[:2]]),
-            ''.join(["%02x" % d for d in self.Data4[2:]]),
+            ''.join(["{:02x}".format(d) for d in self.Data4[:2]]),
+            ''.join(["{:02x}".format(d) for d in self.Data4[2:]]),
         )
 
 class SP_DEVINFO_DATA(ctypes.Structure):
@@ -46,8 +56,10 @@ class SP_DEVINFO_DATA(ctypes.Structure):
         ('DevInst', DWORD),
         ('Reserved', ULONG_PTR),
     ]
+    
     def __str__(self):
         return "ClassGuid:%s DevInst:%s" % (self.ClassGuid, self.DevInst)
+        
 PSP_DEVINFO_DATA = ctypes.POINTER(SP_DEVINFO_DATA)
 
 class SP_DEVICE_INTERFACE_DATA(ctypes.Structure):
@@ -66,32 +78,33 @@ PSP_DEVICE_INTERFACE_DETAIL_DATA = ctypes.c_void_p
 
 class dummy(ctypes.Structure):
     _fields_=[("d1", DWORD), ("d2", CHAR)]
-    _pack_ = 1
 SIZEOF_SP_DEVICE_INTERFACE_DETAIL_DATA_A = ctypes.sizeof(dummy)
 
-SetupDiDestroyDeviceInfoList = ctypes.windll.setupapi.SetupDiDestroyDeviceInfoList
+setupapi = ctypes.windll.LoadLibrary("setupapi")
+SetupDiDestroyDeviceInfoList = setupapi.SetupDiDestroyDeviceInfoList
 SetupDiDestroyDeviceInfoList.argtypes = [HDEVINFO]
 SetupDiDestroyDeviceInfoList.restype = BOOL
 
-SetupDiGetClassDevs = ctypes.windll.setupapi.SetupDiGetClassDevsA
+SetupDiGetClassDevs = setupapi.SetupDiGetClassDevsA
 SetupDiGetClassDevs.argtypes = [ctypes.POINTER(GUID), PCTSTR, HWND, DWORD]
-SetupDiGetClassDevs.restype = ValidHandle # HDEVINFO
+SetupDiGetClassDevs.restype = HDEVINFO
+SetupDiGetClassDevs.errcheck = ValidHandle
 
-SetupDiEnumDeviceInterfaces = ctypes.windll.setupapi.SetupDiEnumDeviceInterfaces
+SetupDiEnumDeviceInterfaces = setupapi.SetupDiEnumDeviceInterfaces
 SetupDiEnumDeviceInterfaces.argtypes = [HDEVINFO, PSP_DEVINFO_DATA, ctypes.POINTER(GUID), DWORD, PSP_DEVICE_INTERFACE_DATA]
 SetupDiEnumDeviceInterfaces.restype = BOOL
 
-SetupDiGetDeviceInterfaceDetail = ctypes.windll.setupapi.SetupDiGetDeviceInterfaceDetailA
+SetupDiGetDeviceInterfaceDetail = setupapi.SetupDiGetDeviceInterfaceDetailA
 SetupDiGetDeviceInterfaceDetail.argtypes = [HDEVINFO, PSP_DEVICE_INTERFACE_DATA, PSP_DEVICE_INTERFACE_DETAIL_DATA, DWORD, PDWORD, PSP_DEVINFO_DATA]
 SetupDiGetDeviceInterfaceDetail.restype = BOOL
 
-SetupDiGetDeviceRegistryProperty = ctypes.windll.setupapi.SetupDiGetDeviceRegistryPropertyA
+SetupDiGetDeviceRegistryProperty = setupapi.SetupDiGetDeviceRegistryPropertyA
 SetupDiGetDeviceRegistryProperty.argtypes = [HDEVINFO, PSP_DEVINFO_DATA, DWORD, PDWORD, PBYTE, DWORD, PDWORD]
 SetupDiGetDeviceRegistryProperty.restype = BOOL
 
 
 GUID_CLASS_COMPORT = GUID(0x86e0d1e0L, 0x8089, 0x11d0,
-    (ctypes.c_ubyte*8)(0x9c, 0xe4, 0x08, 0x00, 0x3e, 0x30, 0x1f, 0x73))
+    (ctypes.c_byte*8)(0x9c, 0xe4, 0x08, 0x00, 0x3e, 0x30, 0x1f, 0x73))
 
 DIGCF_PRESENT = 2
 DIGCF_DEVICEINTERFACE = 16
@@ -116,7 +129,7 @@ class winScan():
         #~ for i in range(256):
         for dwIndex in range(256):
             did = SP_DEVICE_INTERFACE_DATA()
-            did.cbSize = ctypes.sizeof(did)
+            did.cbSize = ctypes.sizeof(SP_DEVICE_INTERFACE_DATA)
 
             if not SetupDiEnumDeviceInterfaces(
                 g_hdi,
@@ -151,7 +164,7 @@ class winScan():
             idd = SP_DEVICE_INTERFACE_DETAIL_DATA_A()
             idd.cbSize = SIZEOF_SP_DEVICE_INTERFACE_DETAIL_DATA_A
             devinfo = SP_DEVINFO_DATA()
-            devinfo.cbSize = ctypes.sizeof(devinfo)
+            devinfo.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
             if not SetupDiGetDeviceInterfaceDetail(
                 g_hdi,
                 ctypes.byref(did),
@@ -159,7 +172,7 @@ class winScan():
                 ctypes.byref(devinfo)
             ):
                 raise ctypes.WinError()
-
+                
             # hardware ID
             szHardwareID = ctypes.create_string_buffer(250)
             if not SetupDiGetDeviceRegistryProperty(
