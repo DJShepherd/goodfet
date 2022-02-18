@@ -21,15 +21,12 @@ def ValidHandle(value, func, arguments):
     return value
 
 CHAR = ctypes.c_char
-PDWORD = ctypes.POINTER(DWORD)
 
 NULL = 0
 HDEVINFO = ctypes.c_void_p
-LPCTSTR = ctypes.c_wchar_p
-PCTSTR = ctypes.c_wchar_p
-PTSTR = ctypes.c_wchar_p
+LPCTSTR = PCTSTR = PTSTR = ctypes.c_char_p
 LPDWORD = PDWORD = ctypes.POINTER(DWORD)
-#~ LPBYTE = PBYTE = ctypes.POINTER(BYTE)
+#LPBYTE = PBYTE = ctypes.POINTER(BYTE)
 LPBYTE = PBYTE = ctypes.c_void_p        # XXX avoids error about types
 
 class GUID(ctypes.Structure):
