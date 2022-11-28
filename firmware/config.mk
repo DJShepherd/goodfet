@@ -75,7 +75,7 @@ AR      = arm-none-eabi-ar
 AS      = arm-none-eabi-as
 CP      = arm-none-eabi-objcopy
 OD	= arm-none-eabi-objdump
-CFLAGS  = -c -fno-common -O1 -g -mcpu=cortex-m3 -mthumb $(pincs)
+CFLAGS  = -c -fno-common -Os -g -mcpu=cortex-m3 -mthumb $(pincs)
 AFLAGS  = -ahls -mapcs-32
 LFLAGS  = -Ttmplink.cmd -nostartfiles
 CPFLAGS = -Obinary
